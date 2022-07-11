@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>bool game</title>
+        <link rel="stylesheet" href="/static/game.css" />
+    </head>
+    <body>
+        <div class="center">
+            <h1>
+                Let's play a game! Enter a message below:
+            </h1>
+            
+            <form action="/game" method="post" style="margin-bottom: 1.5cm;">
+                <ul>
+                    <li>
+                        <label for="name">Name:</label>
+                        <input id="name" name="user_name" />
+                    </li>
+
+                    <li>
+                        <label for="msg">Message:</label>
+                        <textarea id="msg" name="user_message"></textarea>
+                    </li>
+
+                    <li class="button">
+                        <button type="submit">Send your message</button>
+                    </li>
+                </ul>
+            </form>
+
+            {% if messages.len() > 0 %}
+                <h2>The latest messages are:</h2>
+                <ul>
+                    {% for msg in messages.iter().rev() %}
+                        <li>
+                        <p class="name">{{ msg.0 }}:</p>
+                        <p class="message">{{ msg.1 }}</p>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </body>
+</html>

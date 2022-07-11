@@ -1,23 +1,36 @@
+mod game;
+mod index;
 mod ssl;
 
-use actix_files::{Files, NamedFile};
-use actix_web::{middleware, web, App, HttpRequest, HttpServer, Responder};
+use actix_files::Files;
+use actix_web::{middleware, web::Data, App, HttpServer};
+use tokio::sync::Mutex;
 
-/// simple handle
-async fn index(_: HttpRequest) -> impl Responder {
-    NamedFile::open_async("index.html").await.unwrap()
+use std::collections::VecDeque;
+use std::net::IpAddr;
+use std::sync::atomic::AtomicU64;
+
+#[derive(Default)]
+struct AppState {
+    visitors: AtomicU64,
+    messages: Mutex<VecDeque<(String, String, IpAddr)>>,
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    let server = HttpServer::new(|| {
+    let state = Data::new(AppState::default());
+
+    let server = HttpServer::new(move || {
         App::new()
+            .app_data(state.clone())
             // enable logger
             .wrap(middleware::Logger::default())
             // register simple handler, handle all methods
-            .service(web::resource("/").to(index))
+            .service(index::index)
+            .service(game::game_get)
+            .service(game::game_post)
             .service(Files::new("/static", "static").show_files_listing())
     });
 
