@@ -6,6 +6,7 @@ use actix_web::http::StatusCode;
 use actix_web::web::{Data, Form};
 use actix_web::{get, post, HttpRequest, HttpResponse, Responder};
 use askama::Template;
+use log::info;
 use serde::{Deserialize, Serialize};
 
 const MESSAGE_LIMIT: usize = 4;
@@ -47,6 +48,8 @@ async fn game_post(
 
     let name = form.user_name.trim();
     let msg = form.user_message.trim();
+
+    info!("{ip} answered the game form with {name}: {msg}");
 
     if name.is_empty() || msg.is_empty() {
         return NamedFile::open_async("static/game_bad_message.html")
