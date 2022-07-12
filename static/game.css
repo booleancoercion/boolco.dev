@@ -1,7 +1,7 @@
 body,
 html {
     background-color: #bbe4f0;
-    height: 100%;
+    height: auto;
     margin: 0px;
     font-family: sans-serif;
 }
@@ -20,7 +20,8 @@ li p {
 
 }
 
-h1 {
+h1,
+h2 {
     text-align: center;
 }
 
@@ -31,6 +32,12 @@ p.name {
 
 p.message {
     color: gray;
+}
+
+p.name + p.message {
+    max-width: 400px;
+    word-wrap: break-word;
+    vertical-align: top;
 }
 
 form {
