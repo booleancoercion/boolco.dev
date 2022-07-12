@@ -9,7 +9,7 @@ use askama::Template;
 use log::info;
 use serde::{Deserialize, Serialize};
 
-const MESSAGE_LIMIT: usize = 4;
+const MESSAGE_LIMIT: usize = 10;
 
 #[derive(Template)]
 #[template(path = "../templates/game.html")]
@@ -62,7 +62,8 @@ async fn game_post(
     {
         let mut messages = data.messages.lock().await;
 
-        if messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip) {
+        if ip != IpAddr::from([127, 0, 0, 1]) && messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip)
+        {
             return NamedFile::open_async("static/game_greedy.html")
                 .await
                 .unwrap()
