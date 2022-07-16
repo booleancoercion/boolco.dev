@@ -2,7 +2,8 @@ mod game;
 mod index;
 mod ssl;
 
-use actix_files::Files;
+use actix_files::{Files, NamedFile};
+use actix_web::web;
 use actix_web::{middleware, web::Data, App, HttpServer};
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -47,6 +48,10 @@ async fn main() -> std::io::Result<()> {
                 .service(game::game_get)
                 .service(game::game_post)
                 .service(Files::new("/static", "static").show_files_listing())
+                .route(
+                    "/favicon.ico",
+                    web::get().to(|| async { NamedFile::open_async("static/favicon.ico").await }),
+                )
         })
         .workers(4)
     };
