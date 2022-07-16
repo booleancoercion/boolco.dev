@@ -6,3 +6,4 @@
 **/*.rs.bk
 
 build.zip
+state.json

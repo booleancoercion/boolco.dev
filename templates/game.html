@@ -31,14 +31,16 @@
 
             {% if messages.len() > 0 %}
                 <h2>The latest messages are:</h2>
-                <ul>
+                <table>
+                    <tbody>
                     {% for msg in messages.iter().rev() %}
-                        <li>
-                        <p class="name">{{ msg.0 }}:</p>
-                        <p class="message">{{ msg.1 }}</p>
-                        </li>
+                        <tr>
+                            <td>{{ msg.0 }}:</td>
+                            <td>{{ msg.1 }}</td>
+                        </tr>
                     {% endfor %}
-                </ul>
+                    </tbody>
+                </table>
             {% endif %}
         </div>
     </body>
