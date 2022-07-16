@@ -51,7 +51,9 @@ async fn game_post(
 
     info!("{ip} answered the game form with {name}: {msg}");
 
-    if name.is_empty() || msg.is_empty() {
+    let valid_range = 1usize..=500; // bytes
+
+    if !(valid_range.contains(&name.len()) && valid_range.contains(&msg.len())) {
         return NamedFile::open_async("static/game_bad_message.html")
             .await
             .unwrap()

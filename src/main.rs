@@ -54,6 +54,7 @@ async fn main() -> std::io::Result<()> {
                 )
         })
         .workers(4)
+        .shutdown_timeout(10)
     };
 
     let _ = if cfg!(debug_assertions) {
