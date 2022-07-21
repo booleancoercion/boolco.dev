@@ -16,7 +16,7 @@ html {
 
 table {
     table-layout: fixed;
-    width: 37%;
+    width: 60%;
     min-width: 500px;
 }
 
@@ -32,13 +32,13 @@ tbody td:nth-child(1) {
     color: #e28418;
     font-weight: bold;
     text-align: right;
-    width: 10.6%;
+    width: 23%;
     min-width: 150px;
 }
 
 tbody td:nth-child(2) {
     color: gray;
-    width: 26.4%;
+    width: 36.8%;
     min-width: 350px;
 }
 

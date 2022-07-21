@@ -20,12 +20,13 @@
                 <ul>
                     <li>
                         <label for="name">Name:</label>
-                        <input id="name" name="user_name" />
+                        <input id="name" name="user_name" required minlength="1" maxlength="1000"/>
                     </li>
 
                     <li>
                         <label for="msg">Message:</label>
-                        <textarea id="msg" name="user_message"></textarea>
+                        <textarea id="msg" name="user_message" style="resize: none;" 
+                            required minlength="1" maxlength="1000"></textarea>
                     </li>
 
                     <li class="button">

@@ -10,6 +10,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 
 const MESSAGE_LIMIT: usize = 10;
+const MESSAGE_MAX_LENGTH: usize = 1000;
 
 #[derive(Template)]
 #[template(path = "../templates/game.html")]
@@ -51,7 +52,7 @@ async fn game_post(
 
     info!("{ip} answered the game form with {name}: {msg}");
 
-    let valid_range = 1usize..=500; // bytes
+    let valid_range = 1usize..=MESSAGE_MAX_LENGTH; // bytes
 
     if !(valid_range.contains(&name.len()) && valid_range.contains(&msg.len())) {
         return NamedFile::open_async("static/game_bad_message.html")
