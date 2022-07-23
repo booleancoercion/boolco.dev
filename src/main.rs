@@ -1,5 +1,6 @@
 mod game;
 mod index;
+mod og;
 mod ssl;
 
 use actix_files::{Files, NamedFile};
@@ -47,6 +48,7 @@ async fn main() -> std::io::Result<()> {
                 .service(index::index)
                 .service(game::game_get)
                 .service(game::game_post)
+                .service(og::og)
                 .service(Files::new("/static", "static").show_files_listing())
                 .route(
                     "/favicon.ico",

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        {% match title %}
+            {% when Some with (val) %}
+                <meta property="og:title" content="{{ val }}" />
+            {% else %}
+        {% endmatch %}
+
+        {% match type %}
+        {% when Some with (val) %}
+            <meta property="og:type" content="{{ val }}" />
+        {% else %}
+            <meta property="og:type" content="website" />
+        {% endmatch %}
+
+        {% match url %}
+        {% when Some with (val) %}
+            <meta property="og:url" content="{{ val }}" />
+        {% else %}
+            <meta property="og:url" content="https://boolco.dev" />
+        {% endmatch %}
+
+        {% match image %}
+        {% when Some with (val) %}
+            <meta property="og:image" content="{{ val }}" />
+        {% else %}
+        {% endmatch %}
+
+        {% match description %}
+        {% when Some with (val) %}
+            <meta property="og:description" content="{{ val }}" />
+        {% else %}
+        {% endmatch %}
+    </head>
+</html>

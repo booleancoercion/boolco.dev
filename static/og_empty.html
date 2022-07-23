@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>bool game - success</title>
+        <link rel="stylesheet" href="/static/game.css" />
+
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+        <link rel="manifest" href="/static/site.webmanifest">
+    </head>
+    <body>
+        <div class="center">
+            <form action="/og" method="get" style="margin: 1.5cm;">
+                <ul>
+                    <li>
+                        <label for="title">Title:</label>
+                        <input id="title" name="title" maxlength="500"/>
+                    </li>
+                    <li>
+                        <label for="type">Type:</label>
+                        <input id="type" name="type" maxlength="500"/>
+                    </li>
+                    <li>
+                        <label for="url">URL:</label>
+                        <input id="url" name="url" maxlength="500"/>
+                    </li>
+                    <li>
+                        <label for="image">Image:</label>
+                        <input id="image" name="image" maxlength="500"/>
+                    </li>
+            
+                    <li class="button">
+                        <button type="submit">Get URL</button>
+                    </li>
+                </ul>
+            </form>
+        </div>
+    </body>
+</html>
+
