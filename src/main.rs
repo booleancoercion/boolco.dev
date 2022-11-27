@@ -60,13 +60,13 @@ async fn main() -> std::io::Result<()> {
     };
 
     let _ = if cfg!(debug_assertions) {
-        log::info!("starting HTTP server at http://127.0.0.1:80");
-        server.bind(("0.0.0.0", 80))?
+        log::info!("starting HTTP server at http://[::1]:80");
+        server.bind("[::1]:80")?
     } else {
         let config = ssl::load_rustls_config();
 
-        log::info!("starting HTTPS server at http://0.0.0.0:443");
-        server.bind_rustls(("0.0.0.0", 443), config)?
+        log::info!("starting HTTPS server at https://[::]:443");
+        server.bind_rustls("[::]:443", config)?
     }
     .run()
     .await;
