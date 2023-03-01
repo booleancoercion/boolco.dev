@@ -1,3 +1,4 @@
+mod discord_name;
 mod game;
 mod index;
 mod og;
@@ -49,6 +50,8 @@ async fn main() -> std::io::Result<()> {
                 .service(game::game_get)
                 .service(game::game_post)
                 .service(og::og)
+                .service(discord_name::site)
+                .service(discord_name::api)
                 .service(Files::new("/static", "static").show_files_listing())
                 .route(
                     "/favicon.ico",
