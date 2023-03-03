@@ -54,7 +54,8 @@ form {
     /* Form outline */
     padding: 1em;
     border: 0px;
-    border-radius: 0.5em;
+
+    margin-bottom: 1.5cm;
 }
 
 ul {
@@ -104,15 +105,22 @@ textarea {
     height: 5em;
 }
 
+input::selection,
+textarea::selection {
+    background-color: #D48268;
+}
+
 .button {
     /* Align buttons with the text fields */
     padding-left: 90px;
-    /* same size as the label elements */
 }
 
 button {
     /* This extra margin represent roughly the same space as the space
        between the labels and their text fields */
-    margin-left: .5em;
+    margin-left: 4px;
     font-weight: bold;
+    background-color: #D48268;
+    color: white;
+    font-size: 20px;
 }
