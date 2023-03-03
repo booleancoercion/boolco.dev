@@ -11,7 +11,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Same as cargo build --release
+    /// Builds the package for the target that the website runs on
     Build,
 
     /// Builds the release version, then packs everything into a zip file
@@ -36,7 +36,7 @@ enum Command {
         deploy: bool,
 
         /// The port number to use. This option is cached and will be used for the next time.
-        /// If not specified and no port exists in cache, 22 will be used.
+        /// If not specified and no port exists in cache, the default port will be used (22, unless your ssh config differs).
         #[clap(short, long)]
         port: Option<u16>,
     },

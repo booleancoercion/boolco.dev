@@ -51,9 +51,14 @@ impl PackMode {
 }
 
 pub fn build() -> bool {
+    eprintln!("cargo-dev: building website");
     Command::new("cargo")
         .arg("build")
         .arg("--release")
+        .arg("--target")
+        .arg("x86_64-unknown-linux-gnu")
+        .env("TARGET_CC", "x86_64-unknown-linux-gnu-gcc")
+        .env("TARGET_AR", "x86_64-unknown-linux-gnu-ar")
         .exec_bool()
 }
 
@@ -61,6 +66,7 @@ pub fn pack(mode: PackMode) -> bool {
     if !build() {
         return false;
     }
+    eprintln!("cargo-dev: packing website");
 
     if let Err(why) = fs::remove_file(BUILD_ZIP) {
         if why.kind() != std::io::ErrorKind::NotFound {
@@ -73,7 +79,7 @@ pub fn pack(mode: PackMode) -> bool {
         let success = Command::new("zip")
             .arg("-j")
             .arg(BUILD_ZIP)
-            .arg("target/release/website")
+            .arg("target/x86_64-unknown-linux-gnu/release/website")
             .exec_bool();
 
         if !success {
@@ -86,6 +92,7 @@ pub fn pack(mode: PackMode) -> bool {
             .arg("-r")
             .arg(BUILD_ZIP)
             .arg("static")
+            .arg("res")
             .exec_bool()
     } else {
         true
@@ -93,10 +100,10 @@ pub fn pack(mode: PackMode) -> bool {
 }
 
 /// Cached options for the send command.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct SshOptions {
     key: Option<String>,
-    port: u16,
+    port: Option<u16>,
 }
 
 impl SshOptions {
@@ -112,19 +119,10 @@ impl SshOptions {
         }
 
         if let Some(port) = port {
-            cache.port = port;
+            cache.port = Some(port);
         }
 
         cache
-    }
-}
-
-impl Default for SshOptions {
-    fn default() -> Self {
-        SshOptions {
-            key: None,
-            port: 22,
-        }
     }
 }
 
@@ -146,16 +144,18 @@ fn get_ssh_options(key: Option<String>, port: Option<u16>) -> SshOptions {
 }
 
 fn upload_zip(options: &SshOptions) -> bool {
+    eprintln!("cargo-dev: uploading package");
     let mut command = Command::new("scp");
     if let Some(key) = &options.key {
         command.arg("-i").arg(key);
     }
+    if let Some(port) = &options.port {
+        command.arg("-P").arg(port.to_string());
+    }
 
     command
-        .arg("-P")
-        .arg(options.port.to_string())
         .arg(BUILD_ZIP)
-        .arg(concatcp!(HOST, ":", BUILD_ZIP))
+        .arg(concatcp!(HOST, ":boolco.dev/", BUILD_ZIP))
         .exec_bool()
 }
 
@@ -164,8 +164,11 @@ fn default_ssh(options: &SshOptions) -> Command {
     if let Some(key) = &options.key {
         command.arg("-i").arg(key);
     }
+    if let Some(port) = &options.port {
+        command.arg("-P").arg(port.to_string());
+    }
 
-    command.arg("-p").arg(options.port.to_string()).arg(HOST);
+    command.arg(HOST);
 
     command
 }
@@ -174,6 +177,8 @@ pub fn send(key: Option<String>, mode: PackMode, deploy: bool, port: Option<u16>
     if !pack(mode) {
         return false;
     }
+
+    eprintln!("cargo-dev: sending package");
 
     let options = get_ssh_options(key, port);
 
@@ -185,13 +190,14 @@ pub fn send(key: Option<String>, mode: PackMode, deploy: bool, port: Option<u16>
     // process zip file on server
     let mut command = default_ssh(&options);
 
-    let mut buffer = String::new(); // stores the command that will be run on the server
+    let mut buffer = String::from("cd boolco.dev\n"); // stores the command that will be run on the server
     if deploy {
         writeln!(&mut buffer, "./stop.sh").unwrap();
     }
     if mode.r#static() {
         // no need to do the same for the binary as it will be overwritten
         writeln!(&mut buffer, "rm -rf static").unwrap();
+        writeln!(&mut buffer, "rm -rf res").unwrap();
     }
     writeln!(&mut buffer, "unzip -o {BUILD_ZIP}").unwrap();
     if deploy {
@@ -230,7 +236,7 @@ pub fn power(key: Option<String>, port: Option<u16>, power_options: PowerOptions
     let options = get_ssh_options(key, port);
     let mut command = default_ssh(&options);
 
-    let mut buffer = String::new();
+    let mut buffer = String::from("cd boolco.dev\n");
     if power_options.stop() {
         writeln!(&mut buffer, "./stop.sh").unwrap();
     }
