@@ -58,13 +58,12 @@ async fn main() -> std::io::Result<()> {
                     web::get().to(|| async { NamedFile::open_async("res/favicon.ico").await }),
                 )
         })
-        .workers(4)
         .shutdown_timeout(10)
     };
 
     let _ = if cfg!(debug_assertions) {
         log::info!("starting HTTP server at http://[::1]:80");
-        server.bind("[::1]:80")?
+        server.bind("[::1]:8080")?
     } else {
         let config = ssl::load_rustls_config();
 
