@@ -55,7 +55,7 @@ async fn main() -> std::io::Result<()> {
                 .service(Files::new("/static", "static").show_files_listing())
                 .route(
                     "/favicon.ico",
-                    web::get().to(|| async { NamedFile::open_async("static/favicon.ico").await }),
+                    web::get().to(|| async { NamedFile::open_async("res/favicon.ico").await }),
                 )
         })
         .workers(4)

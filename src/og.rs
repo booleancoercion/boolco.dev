@@ -53,7 +53,7 @@ async fn og(req: HttpRequest, og: web::Query<Og>) -> HttpResponse {
     }
 
     if og.all_nones() {
-        NamedFile::open_async("static/og_empty.html")
+        NamedFile::open_async("res/og_empty.html")
             .await
             .unwrap()
             .into_response(&req)

@@ -48,7 +48,7 @@ async fn game_post(
     let valid_range = 1usize..=MESSAGE_MAX_LENGTH; // bytes
 
     if !(valid_range.contains(&name.len()) && valid_range.contains(&msg.len())) {
-        return NamedFile::open_async("static/game_bad_message.html")
+        return NamedFile::open_async("res/game_bad_message.html")
             .await
             .unwrap()
             .customize()
@@ -60,7 +60,7 @@ async fn game_post(
 
         if ip != IpAddr::from([127, 0, 0, 1]) && messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip)
         {
-            return NamedFile::open_async("static/game_greedy.html")
+            return NamedFile::open_async("res/game_greedy.html")
                 .await
                 .unwrap()
                 .customize()
@@ -74,7 +74,7 @@ async fn game_post(
         messages.push_back((name.into(), msg.into(), ip))
     }
 
-    NamedFile::open_async("static/game_success.html")
+    NamedFile::open_async("res/game_success.html")
         .await
         .unwrap()
         .customize() // otherwise return type doesn't match
