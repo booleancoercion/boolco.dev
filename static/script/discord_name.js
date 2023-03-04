@@ -7,7 +7,7 @@ window.onload = function () {
     const answerText = document.querySelector("#answer_text");
 
     button.addEventListener("click", () => {
-        if (username.value.length < 3) {
+        if (username.value.length < 3 || username.value.length > 50 || nickname.value.length > 50) {
             return;
         }
 

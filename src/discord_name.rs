@@ -3,8 +3,9 @@ use std::cmp::Reverse;
 use actix_files::NamedFile;
 use actix_web::{
     get,
+    http::StatusCode,
     web::{self, Data, Json},
-    Responder,
+    Either, Responder,
 };
 use serde::Deserialize;
 
@@ -24,14 +25,27 @@ struct Names {
 #[get("/api/v1/discord_name")]
 async fn api(data: Data<super::AppData>, names: web::Query<Names>) -> impl Responder {
     let Names { username, nickname } = names.0;
+    if username.chars().count() > 50
+        || nickname
+            .as_deref()
+            .map(|x| x.chars().count() > 50)
+            .unwrap_or(false)
+    {
+        return Either::Right(
+            "username or nickname too long"
+                .customize()
+                .with_status(StatusCode::BAD_REQUEST),
+        );
+    }
     let matches = tokio::task::spawn_blocking(move || {
         let mut matches = poingus::get_matches(&username, nickname.as_deref(), data.dictionary);
         matches.sort_unstable_by_key(|s| Reverse(s.len()));
+        matches.truncate(1000);
 
         matches
     })
     .await
     .unwrap();
 
-    Json(matches)
+    Either::Left(Json(matches))
 }
