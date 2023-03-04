@@ -3,7 +3,7 @@ use actix_web::{get, Responder};
 
 #[get("/discord_name")]
 async fn site() -> impl Responder {
-    NamedFile::open_async("static/discord_name.html")
+    NamedFile::open_async("res/discord_name.html")
         .await
         .unwrap()
 }
