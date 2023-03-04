@@ -9,26 +9,31 @@
         <link rel="icon" type="image/png" sizes="32x32" href="/static/browser_stuff/favicon-32x32.png">
         <link rel="icon" type="image/png" sizes="16x16" href="/static/browser_stuff/favicon-16x16.png">
         <link rel="manifest" href="/static/browser_stuff/site.webmanifest">
+
+        <script src="/static/script/discord_name.js"></script>
     </head>
     <body>
         <div class="center">
             <h1>Discord name collision finder thingy</h1>
+            <noscript>
+                <h2 style="color: red;">Please enable JavaScript in order to use this page.</h2>
+            </noscript>
             <form action="javascript:void(0);">
             <ul>
                 <li>
-                    <label>Username:</label> <input id="username" required/>
+                    <label>Username:</label> <input id="username" required minlength=3/>
                 </li>
                 <li>
                     <label>Nickname (optional):</label> <input id="nickname"/>
                 </li>
                 <li class="button">
-                    <button type="submit">Go!</button>
+                    <button id="button" type="submit">Go!</button>
                 </li>
             </ul>
             </form>
 
             <div id="answer">
-                <span id="answer_title">blah blah:</span> <span id="answer_text">blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah blah </span>
+                <span id="answer_title"></span> <span id="answer_text"></span>
             </div>
         </div>
     </body>

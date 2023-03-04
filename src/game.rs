@@ -18,8 +18,8 @@ struct GameTemplate {
 }
 
 #[get("/game")]
-async fn game_get(data: Data<super::AppState>) -> impl Responder {
-    let messages = data.messages.lock().await;
+async fn game_get(data: Data<super::AppData>) -> impl Responder {
+    let messages = data.state.messages.lock().await;
     let messages = messages.iter().cloned().collect();
 
     GameTemplate { messages }
@@ -34,7 +34,7 @@ struct GameParams {
 #[post("/game")]
 async fn game_post(
     req: HttpRequest,
-    data: Data<super::AppState>,
+    data: Data<super::AppData>,
     form: Form<GameParams>,
 ) -> impl Responder {
     let form = form.into_inner();
@@ -56,7 +56,7 @@ async fn game_post(
     }
 
     {
-        let mut messages = data.messages.lock().await;
+        let mut messages = data.state.messages.lock().await;
 
         if ip != IpAddr::from([127, 0, 0, 1]) && messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip)
         {

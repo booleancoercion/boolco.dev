@@ -14,10 +14,11 @@ rustls = "0.20.2"
 rustls-pemfile = "1"
 askama = { version = "0.11.1", features = ["with-actix-web"] }
 serde = "1.0.139"
-tokio = { version = "1.19.2", features = ["sync"] }
+tokio = { version = "1.19.2", features = ["sync", "fs"] }
 serde_json = "1.0.82"
 askama_actix = "0.13.0"
 serde_urlencoded = "0.7.1"
+poingus = { git = "https://github.com/booleancoercion/poingus", tag = "v0.1.0" }
 
 [profile.release]
 strip = "symbols"

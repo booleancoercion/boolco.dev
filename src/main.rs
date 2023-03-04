@@ -9,11 +9,11 @@ use actix_web::web;
 use actix_web::{middleware, web::Data, App, HttpServer};
 use log::info;
 use serde::{Deserialize, Serialize};
+use tokio::fs::File;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
 
 use std::collections::VecDeque;
-use std::fs::{File, OpenOptions};
-use std::io::BufReader;
 use std::net::IpAddr;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -30,19 +30,39 @@ struct NonSyncAppState {
     messages: VecDeque<(String, String, IpAddr)>,
 }
 
+#[derive(Debug)]
+struct AppData {
+    state: AppState,
+    dictionary: &'static [&'static str],
+}
+
 const STATE_FILE: &str = "state.json";
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    let state = Data::new(load_state());
+    let dict_file = BufReader::new(File::open("res/words_alpha.txt").await?);
+    let mut dictionary = vec![];
+
+    let mut lines = dict_file.lines();
+    while let Some(line) = lines.next_line().await.unwrap() {
+        if line.len() < 3 {
+            continue;
+        }
+        dictionary.push(&*Box::leak(line.into_boxed_str()));
+    }
+
+    let data = Data::new(AppData {
+        state: load_state().await,
+        dictionary: dictionary.leak(),
+    });
 
     let server = {
-        let state = state.clone();
+        let data = data.clone();
         HttpServer::new(move || {
             App::new()
-                .app_data(state.clone())
+                .app_data(data.clone())
                 // enable logger
                 .wrap(middleware::Logger::default())
                 // register simple handler, handle all methods
@@ -73,18 +93,24 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await;
 
-    save_state(Arc::try_unwrap(state.into_inner()).unwrap());
+    save_state(Arc::try_unwrap(data.into_inner()).unwrap().state).await;
     Ok(())
 }
 
-fn load_state() -> AppState {
-    match File::open(STATE_FILE)
-        .ok()
-        .map(BufReader::new)
-        .map(serde_json::from_reader::<_, NonSyncAppState>)
-        .and_then(Result::ok)
-        .map(Into::into)
-    {
+async fn load_state() -> AppState {
+    let maybe_state = tokio::task::spawn_blocking(|| {
+        use std::fs::File;
+        use std::io::BufReader;
+
+        File::open(STATE_FILE)
+            .ok()
+            .map(BufReader::new)
+            .map(serde_json::from_reader::<_, NonSyncAppState>)
+    })
+    .await
+    .unwrap();
+
+    match maybe_state.and_then(Result::ok).map(Into::into) {
         Some(state) => {
             info!("Found and loaded state.");
             state
@@ -96,16 +122,22 @@ fn load_state() -> AppState {
     }
 }
 
-fn save_state(state: AppState) {
+async fn save_state(state: AppState) {
     let state: NonSyncAppState = state.into();
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(STATE_FILE)
-        .unwrap();
 
-    serde_json::to_writer_pretty(&mut file, &state).unwrap();
+    tokio::task::spawn_blocking(move || {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(STATE_FILE)
+            .unwrap();
+
+        serde_json::to_writer_pretty(&mut file, &state).unwrap();
+    })
+    .await
+    .unwrap();
+
     info!("Successfully saved state.")
 }
 
