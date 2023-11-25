@@ -3,3 +3,4 @@ linker = "x86_64-unknown-linux-gnu-gcc"
 
 [alias]
 dev = "run --manifest-path ./cargo-dev/Cargo.toml --release --"
+prepare = "run --features prepare_db"

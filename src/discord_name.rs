@@ -23,7 +23,7 @@ struct Names {
 }
 
 #[get("/api/v1/discord_name")]
-async fn api(data: Data<super::AppData>, names: web::Query<Names>) -> impl Responder {
+async fn api(data: Data<crate::AppData>, names: web::Query<Names>) -> impl Responder {
     let Names { username, nickname } = names.0;
     if username.chars().count() > 50
         || nickname

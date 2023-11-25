@@ -10,7 +10,7 @@ struct IndexTemplate {
 }
 
 #[get("/")]
-async fn index(data: Data<super::AppData>) -> impl Responder {
+async fn index(data: Data<crate::AppData>) -> impl Responder {
     let visitors = data.state.visitors.fetch_add(1, Ordering::SeqCst) + 1;
 
     IndexTemplate { visitors }

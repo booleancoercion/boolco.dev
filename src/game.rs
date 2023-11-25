@@ -18,7 +18,7 @@ struct GameTemplate {
 }
 
 #[get("/game")]
-async fn game_get(data: Data<super::AppData>) -> impl Responder {
+async fn game_get(data: Data<crate::AppData>) -> impl Responder {
     let messages = data.state.messages.lock().await;
     let messages = messages.iter().cloned().collect();
 
@@ -34,7 +34,7 @@ struct GameParams {
 #[post("/game")]
 async fn game_post(
     req: HttpRequest,
-    data: Data<super::AppData>,
+    data: Data<crate::AppData>,
     form: Form<GameParams>,
 ) -> impl Responder {
     let form = form.into_inner();
@@ -58,8 +58,7 @@ async fn game_post(
     {
         let mut messages = data.state.messages.lock().await;
 
-        if ip != IpAddr::from([127, 0, 0, 1]) && messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip)
-        {
+        if !ip.is_loopback() && messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip) {
             return NamedFile::open_async("res/game_greedy.html")
                 .await
                 .unwrap()

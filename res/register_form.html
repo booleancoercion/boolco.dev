@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>boolco.dev - register</title>
+        <link rel="stylesheet" href="/static/style/game.css" />
+
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/browser_stuff/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/browser_stuff/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/browser_stuff/favicon-16x16.png">
+        <link rel="manifest" href="/static/browser_stuff/site.webmanifest">
+    </head>
+    <body>
+        <div class="center">
+            <h1>Register</h1>
+            <form action="/register" method="post">
+                <ul>
+                    <li>
+                        <label for="username">Username:</label>
+                        <input autocomplete="username" id="username" name="username" 
+                        maxlength="64" required pattern="[a-zA-Z0-9_]+"/>
+                    </li>
+                    <li>
+                        <label for="new-password">Password:</label>
+                        <input autocomplete="new-password" id="new-password" name="password"
+                        type="password" maxlength="64" minlength="8" pattern="[ -~]+"/>
+                    </li>
+                    <li>
+                        <label for="ticket">Ticket:</label>
+                        <input id="ticket" name="ticket" autocomplete="off"/>
+                    </li>
+            
+                    <li class="button">
+                        <button type="submit">Sign Up</button>
+                    </li>
+                </ul>
+            </form>
+
+            <p style="font: 1em monospace;">
+                Username must be between 1-64 characters, and must only include alphanumeric or _ characters. <br>
+                Password must be between 8-64 characters, and must only include printable ASCII characters.
+            </p>
+        </div>
+    </body>
+</html>
+

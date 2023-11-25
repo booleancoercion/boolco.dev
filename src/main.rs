@@ -1,12 +1,24 @@
-mod discord_name;
-mod game;
-mod index;
-mod og;
-mod ssl;
+#![cfg_attr(feature = "prepare_db", allow(unused))]
+
+#[cfg(not(feature = "prepare_db"))]
+#[path = ""]
+mod reexport_non_db_modules {
+    pub mod auth;
+    pub mod discord_name;
+    pub mod game;
+    pub mod index;
+    pub mod og;
+    pub mod ssl;
+}
+#[cfg(not(feature = "prepare_db"))]
+use reexport_non_db_modules::*;
+
+mod db;
 
 use actix_files::{Files, NamedFile};
 use actix_web::web;
 use actix_web::{middleware, web::Data, App, HttpServer};
+use db::Db;
 use log::info;
 use serde::{Deserialize, Serialize};
 use tokio::fs::File;
@@ -34,10 +46,24 @@ struct NonSyncAppState {
 struct AppData {
     state: AppState,
     dictionary: &'static [&'static str],
+    db: Db,
 }
 
 const STATE_FILE: &str = "state.json";
+const DATABASE_FILE: &str = "data.sqlite";
+const PEPPER_FILE: &str = "pepper";
+#[cfg(feature = "prepare_db")]
+const SCHEMA_FILE: &str = "schema.sqlite";
 
+#[cfg(feature = "prepare_db")]
+#[actix_web::main]
+async fn main() {
+    let _ = tokio::fs::remove_file(SCHEMA_FILE).await;
+    let _ = tokio::fs::remove_file(DATABASE_FILE).await;
+    db::prepare_db(SCHEMA_FILE).await;
+}
+
+#[cfg(not(feature = "prepare_db"))]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
@@ -53,9 +79,12 @@ async fn main() -> std::io::Result<()> {
         dictionary.push(&*Box::leak(line.into_boxed_str()));
     }
 
+    let pepper = tokio::fs::read(PEPPER_FILE).await.unwrap();
+
     let data = Data::new(AppData {
         state: load_state().await,
         dictionary: dictionary.leak(),
+        db: Db::new(DATABASE_FILE, pepper.leak()).await,
     });
 
     let server = {
@@ -72,6 +101,10 @@ async fn main() -> std::io::Result<()> {
                 .service(og::og)
                 .service(discord_name::site)
                 .service(discord_name::api)
+                .service(auth::login_get)
+                .service(auth::login_post)
+                .service(auth::register_get)
+                .service(auth::register_post)
                 .service(Files::new("/static", "static").show_files_listing())
                 .route(
                     "/favicon.ico",
@@ -82,8 +115,8 @@ async fn main() -> std::io::Result<()> {
     };
 
     let _ = if cfg!(debug_assertions) {
-        log::info!("starting HTTP server at http://[::1]:80");
-        server.bind("[::1]:8080")?
+        log::info!("starting HTTP server at http://localhost:8080");
+        server.bind("localhost:8080")?
     } else {
         let config = ssl::load_rustls_config();
 
