@@ -51,7 +51,7 @@ mod inner {
 
     #[derive(Serialize, Deserialize)]
     struct Config {
-        bind_addr: String,
+        bind_addr: Option<String>,
         workers: Option<usize>,
         ssl: Option<SslConfig>,
     }
@@ -147,25 +147,30 @@ mod inner {
                 server = server.workers(workers);
             }
 
+            info!("starting HTTP server at http://localhost:8080");
+            server.bind("localhost:8080")?
+        };
+
+        let server = if let Some(bind_addr) = &config.bind_addr {
+            if let Some(SslConfig {
+                certificate,
+                key,
+                enabled: true,
+            }) = config.ssl
+            {
+                let ssl_config = ssl::load_rustls_config(&certificate, &key);
+
+                info!("starting HTTPS server at https://{}", bind_addr);
+                server.bind_rustls(bind_addr, ssl_config)?
+            } else {
+                info!("starting HTTP server at http://{}", bind_addr);
+                server.bind(bind_addr)?
+            }
+        } else {
             server
         };
 
-        let _ = if let Some(SslConfig {
-            certificate,
-            key,
-            enabled: true,
-        }) = config.ssl
-        {
-            let ssl_config = ssl::load_rustls_config(&certificate, &key);
-
-            info!("starting HTTPS server at https://{}", &config.bind_addr);
-            server.bind_rustls(&config.bind_addr, ssl_config)?
-        } else {
-            info!("starting HTTP server at http://{}", &config.bind_addr);
-            server.bind(&config.bind_addr)?
-        }
-        .run()
-        .await;
+        let _ = server.run().await;
 
         let data = Arc::try_unwrap(data.into_inner()).unwrap();
         save_state(data.state, &data.db).await;

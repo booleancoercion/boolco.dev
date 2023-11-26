@@ -1,6 +1,7 @@
 use actix_files::NamedFile;
+use actix_web::http::StatusCode;
 use actix_web::web::{self, Data};
-use actix_web::{get, post, HttpRequest, Responder};
+use actix_web::{get, post, HttpRequest, HttpResponseBuilder, Responder};
 use serde::{Deserialize, Serialize};
 
 #[get("/login")]
@@ -69,11 +70,12 @@ async fn register_post(
                 .insert_user(&form.ticket, &form.username, &form.password)
                 .await
         {
-            return "success";
+            return HttpResponseBuilder::new(StatusCode::OK).body("success");
         }
     } else if req.peer_addr().unwrap().ip().is_loopback() {
-        return &*data.db.generate_registration_ticket().await.leak();
+        return HttpResponseBuilder::new(StatusCode::OK)
+            .body(data.db.generate_registration_ticket().await);
     }
 
-    "failure"
+    HttpResponseBuilder::new(StatusCode::FORBIDDEN).body("failure")
 }
