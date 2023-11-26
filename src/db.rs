@@ -77,16 +77,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
         query!(
             "\
 BEGIN TRANSACTION;
-DELETE FROM registration_tickets WHERE ticket = ?;
-INSERT INTO users (name, password_hash) VALUES (?, ?);
+INSERT INTO users (name, password_hash) SELECT ?, ? FROM registration_tickets WHERE ticket = ?;
+DELETE FROM registration_tickets WHERE ticket = ? RETURNING id;
 COMMIT TRANSACTION;",
-            ticket,
             username,
-            hash
+            hash,
+            ticket,
+            ticket
         )
-        .execute(&self.pool)
+        .fetch_optional(&self.pool)
         .await
-        .is_ok()
+        .unwrap()
+        .is_some()
     }
 
     pub async fn generate_registration_ticket(&self) -> String {
