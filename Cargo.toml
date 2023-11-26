@@ -29,6 +29,7 @@ sqlx = { version = "0.7", default-features = false, features = [
 ] }
 argon2 = "0.5.2"
 base64 = "0.21.5"
+toml = "0.8.8"
 
 [profile.release]
 strip = "symbols"

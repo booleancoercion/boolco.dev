@@ -2,15 +2,16 @@ use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 
-pub fn load_rustls_config() -> ServerConfig {
+pub fn load_rustls_config(certificate: &str, key: &str) -> ServerConfig {
     // init server config builder with safe defaults
     let config = ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth();
 
     // load TLS key/cert files
-    let cert_file = &mut BufReader::new(File::open("ssl/boolco_dev.crt").unwrap());
-    let key_file = &mut BufReader::new(File::open("ssl/boolco_dev.key").unwrap());
+    let cert_file =
+        &mut BufReader::new(File::open(certificate).expect("ssl: couldn't open certificate file"));
+    let key_file = &mut BufReader::new(File::open(key).expect("ssl: couldn't open key file"));
 
     // convert files to key/cert objects
     let cert_chain = certs(cert_file)

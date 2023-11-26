@@ -1,46 +1,6 @@
 #![cfg_attr(feature = "prepare_db", allow(unused))]
 
-#[cfg(not(feature = "prepare_db"))]
-#[path = ""]
-mod reexport_non_db_modules {
-    pub mod auth;
-    pub mod discord_name;
-    pub mod game;
-    pub mod index;
-    pub mod og;
-    pub mod ssl;
-}
-#[cfg(not(feature = "prepare_db"))]
-use reexport_non_db_modules::*;
-
 mod db;
-
-use actix_files::{Files, NamedFile};
-use actix_web::web;
-use actix_web::{middleware, web::Data, App, HttpServer};
-use db::Db;
-use game::GameMessage;
-use log::info;
-use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::sync::Mutex;
-
-use std::collections::VecDeque;
-use std::sync::atomic::AtomicI64;
-use std::sync::Arc;
-
-#[derive(Default, Debug)]
-struct AppState {
-    visitors: AtomicI64,
-    messages: Mutex<VecDeque<GameMessage>>,
-}
-
-#[derive(Debug)]
-struct AppData {
-    state: AppState,
-    dictionary: &'static [&'static str],
-    db: Db,
-}
 
 const DATABASE_FILE: &str = "data.sqlite";
 const PEPPER_FILE: &str = "pepper";
@@ -58,91 +18,174 @@ async fn main() {
 #[cfg(not(feature = "prepare_db"))]
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    inner::main().await
+}
 
-    let dict_file = BufReader::new(
-        File::open("res/words_alpha.txt")
-            .await
-            .expect("dictionary file couldn't be opened"),
-    );
-    let mut dictionary = vec![];
+#[cfg(not(feature = "prepare_db"))]
+pub use inner::*;
 
-    let mut lines = dict_file.lines();
-    while let Some(line) = lines.next_line().await.unwrap() {
-        if line.len() < 3 {
-            continue;
+#[cfg(not(feature = "prepare_db"))]
+#[path = ""]
+mod inner {
+    pub mod auth;
+    pub mod discord_name;
+    pub mod game;
+    pub mod index;
+    pub mod og;
+    pub mod ssl;
+
+    use crate::db::Db;
+    use actix_files::{Files, NamedFile};
+    use actix_web::web;
+    use actix_web::{middleware, web::Data, App, HttpServer};
+    use game::GameMessage;
+    use log::info;
+    use serde::{Deserialize, Serialize};
+    use tokio::fs::File;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::sync::Mutex;
+
+    use std::collections::VecDeque;
+    use std::sync::atomic::AtomicI64;
+    use std::sync::Arc;
+
+    #[derive(Serialize, Deserialize)]
+    struct Config {
+        bind_addr: String,
+        workers: Option<usize>,
+        ssl: Option<SslConfig>,
+    }
+
+    const fn bool_as_true() -> bool {
+        true
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct SslConfig {
+        certificate: String,
+        key: String,
+        #[serde(default = "bool_as_true")]
+        enabled: bool,
+    }
+
+    #[derive(Default, Debug)]
+    struct AppState {
+        visitors: AtomicI64,
+        messages: Mutex<VecDeque<GameMessage>>,
+    }
+
+    #[derive(Debug)]
+    pub struct AppData {
+        state: AppState,
+        dictionary: &'static [&'static str],
+        db: Db,
+    }
+
+    pub async fn main() -> std::io::Result<()> {
+        env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+
+        let config: Config = toml::from_str(
+            &tokio::fs::read_to_string("config.toml")
+                .await
+                .expect("couldn't open config.toml"),
+        )
+        .expect("invalid config.toml format");
+
+        let dict_file = BufReader::new(
+            File::open("res/words_alpha.txt")
+                .await
+                .expect("dictionary file couldn't be opened"),
+        );
+        let mut dictionary = vec![];
+
+        let mut lines = dict_file.lines();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            if line.len() < 3 {
+                continue;
+            }
+            dictionary.push(&*Box::leak(line.into_boxed_str()));
         }
-        dictionary.push(&*Box::leak(line.into_boxed_str()));
-    }
 
-    let pepper = tokio::fs::read(PEPPER_FILE)
-        .await
-        .expect("pepper file couldn't be opened");
-    let db = Db::new(DATABASE_FILE, pepper.leak()).await;
+        let pepper = tokio::fs::read(crate::PEPPER_FILE)
+            .await
+            .expect("pepper file couldn't be opened");
+        let db = Db::new(crate::DATABASE_FILE, pepper.leak()).await;
 
-    let data = Data::new(AppData {
-        state: load_state(&db).await,
-        dictionary: dictionary.leak(),
-        db,
-    });
+        let data = Data::new(AppData {
+            state: load_state(&db).await,
+            dictionary: dictionary.leak(),
+            db,
+        });
 
-    let server = {
-        let data = data.clone();
-        HttpServer::new(move || {
-            App::new()
-                .app_data(data.clone())
-                // enable logger
-                .wrap(middleware::Logger::default())
-                // register simple handler, handle all methods
-                .service(index::index)
-                .service(game::game_get)
-                .service(game::game_post)
-                .service(og::og)
-                .service(discord_name::site)
-                .service(discord_name::api)
-                .service(auth::login_get)
-                .service(auth::login_post)
-                .service(auth::register_get)
-                .service(auth::register_post)
-                .service(Files::new("/static", "static").show_files_listing())
-                .route(
-                    "/favicon.ico",
-                    web::get().to(|| async { NamedFile::open_async("res/favicon.ico").await }),
-                )
-        })
-        .shutdown_timeout(10)
-    };
+        let server = {
+            let data = data.clone();
+            let mut server = HttpServer::new(move || {
+                App::new()
+                    .app_data(data.clone())
+                    // enable logger
+                    .wrap(middleware::Logger::default())
+                    // register simple handler, handle all methods
+                    .service(index::index)
+                    .service(game::game_get)
+                    .service(game::game_post)
+                    .service(og::og)
+                    .service(discord_name::site)
+                    .service(discord_name::api)
+                    .service(auth::login_get)
+                    .service(auth::login_post)
+                    .service(auth::register_get)
+                    .service(auth::register_post)
+                    .service(Files::new("/static", "static").show_files_listing())
+                    .route(
+                        "/favicon.ico",
+                        web::get().to(|| async { NamedFile::open_async("res/favicon.ico").await }),
+                    )
+            })
+            .shutdown_timeout(10);
 
-    let _ = if cfg!(debug_assertions) {
-        info!("starting HTTP server at http://localhost:8080");
-        server.bind("localhost:8080")?
-    } else {
-        let config = ssl::load_rustls_config();
+            if let Some(workers) = config.workers {
+                server = server.workers(workers);
+            }
 
-        info!("starting HTTPS server at https://[::]:443");
-        server.bind_rustls("[::]:443", config)?
-    }
-    .run()
-    .await;
+            server
+        };
 
-    let data = Arc::try_unwrap(data.into_inner()).unwrap();
-    save_state(data.state, &data.db).await;
-    Ok(())
-}
+        let _ = if let Some(SslConfig {
+            certificate,
+            key,
+            enabled: true,
+        }) = config.ssl
+        {
+            let ssl_config = ssl::load_rustls_config(&certificate, &key);
 
-async fn load_state(db: &Db) -> AppState {
-    let visitors = db.get_visitors().await;
-    let messages = db.get_messages().await;
-
-    AppState {
-        visitors: AtomicI64::new(visitors),
-        messages: Mutex::new(messages.into()),
-    }
-}
-
-async fn save_state(state: AppState, db: &Db) {
-    let AppState { visitors, messages } = state;
-    db.set_visitors(visitors.into_inner()).await;
-    db.set_messages(messages.into_inner().make_contiguous())
+            info!("starting HTTPS server at https://{}", &config.bind_addr);
+            server.bind_rustls(&config.bind_addr, ssl_config)?
+        } else {
+            info!("starting HTTP server at http://{}", &config.bind_addr);
+            server.bind(&config.bind_addr)?
+        }
+        .run()
         .await;
+
+        let data = Arc::try_unwrap(data.into_inner()).unwrap();
+        save_state(data.state, &data.db).await;
+        Ok(())
+    }
+
+    async fn load_state(db: &Db) -> AppState {
+        let visitors = db.get_visitors().await;
+        let messages = db.get_messages().await;
+
+        AppState {
+            visitors: AtomicI64::new(visitors),
+            messages: Mutex::new(messages.into()),
+        }
+    }
+
+    async fn save_state(state: AppState, db: &Db) {
+        let AppState { visitors, messages } = state;
+        db.set_visitors(visitors.into_inner()).await;
+        db.set_messages(messages.into_inner().make_contiguous())
+            .await;
+    }
 }

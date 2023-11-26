@@ -5,6 +5,7 @@ use base64::Engine;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{query, QueryBuilder, SqlitePool};
 
+#[cfg(not(feature = "prepare_db"))]
 use crate::game::GameMessage;
 
 const HASH_ENCODING: Encoding = Encoding::B64;
