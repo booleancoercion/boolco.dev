@@ -11,10 +11,17 @@ use serde::{Deserialize, Serialize};
 const MESSAGE_LIMIT: usize = 10;
 const MESSAGE_MAX_LENGTH: usize = 1000;
 
+#[derive(Debug, Clone)]
+pub struct GameMessage {
+    pub name: String,
+    pub content: String,
+    pub ip: IpAddr,
+}
+
 #[derive(Template)]
 #[template(path = "game.html")]
 struct GameTemplate {
-    messages: Vec<(String, String, IpAddr)>,
+    messages: Vec<GameMessage>,
 }
 
 #[get("/game")]
@@ -58,7 +65,11 @@ async fn game_post(
     {
         let mut messages = data.state.messages.lock().await;
 
-        if !ip.is_loopback() && messages.iter().any(|(_, _, msg_ip)| msg_ip == &ip) {
+        if !ip.is_loopback()
+            && messages
+                .iter()
+                .any(|GameMessage { ip: msg_ip, .. }| msg_ip == &ip)
+        {
             return NamedFile::open_async("res/game_greedy.html")
                 .await
                 .unwrap()
@@ -70,7 +81,11 @@ async fn game_post(
             messages.pop_front();
         }
 
-        messages.push_back((name.into(), msg.into(), ip))
+        messages.push_back(GameMessage {
+            name: name.into(),
+            content: msg.into(),
+            ip,
+        })
     }
 
     NamedFile::open_async("res/game_success.html")

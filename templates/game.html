@@ -41,8 +41,8 @@
                     <tbody>
                     {% for msg in messages.iter().rev() %}
                         <tr>
-                            <td>{{ msg.0 }}:</td>
-                            <td>{{ msg.1 }}</td>
+                            <td>{{ msg.name }}:</td>
+                            <td>{{ msg.content }}</td>
                         </tr>
                     {% endfor %}
                     </tbody>

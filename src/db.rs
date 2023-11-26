@@ -3,7 +3,9 @@ use argon2::password_hash::{Encoding, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine;
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{query, SqlitePool};
+use sqlx::{query, QueryBuilder, SqlitePool};
+
+use crate::game::GameMessage;
 
 const HASH_ENCODING: Encoding = Encoding::B64;
 const TICKET_ENGINE: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
@@ -108,16 +110,66 @@ COMMIT TRANSACTION;",
             }
         }
     }
+
+    pub async fn get_visitors(&self) -> i64 {
+        query!("SELECT visitors FROM visitors;")
+            .fetch_one(&self.pool)
+            .await
+            .unwrap()
+            .visitors
+    }
+
+    pub async fn set_visitors(&self, visitors: i64) {
+        query!("UPDATE visitors SET visitors = ?;", visitors)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+    }
+
+    pub async fn get_messages(&self) -> Vec<GameMessage> {
+        let messages = query!("SELECT * FROM messages ORDER BY id ASC;")
+            .fetch_all(&self.pool)
+            .await
+            .unwrap();
+
+        messages
+            .into_iter()
+            .map(|rec| GameMessage {
+                name: rec.name,
+                content: rec.content,
+                ip: rec.ip.parse().unwrap(),
+            })
+            .collect()
+    }
+
+    pub async fn set_messages(&self, messages: &[GameMessage]) {
+        query!("DELETE FROM messages;")
+            .execute(&self.pool)
+            .await
+            .unwrap();
+
+        if !messages.is_empty() {
+            let mut query_builder: QueryBuilder<sqlx::Sqlite> =
+                QueryBuilder::new("INSERT INTO messages(name, content, ip) ");
+            query_builder.push_values(messages, |mut b, message| {
+                b.push_bind(&message.name)
+                    .push_bind(&message.content)
+                    .push_bind(message.ip.to_string());
+            });
+
+            query_builder.build().execute(&self.pool).await.unwrap();
+        }
+    }
 }
 
 async fn create_tables(conn: impl sqlx::SqliteExecutor<'_>) {
     query!(
         "\
 CREATE TABLE IF NOT EXISTS messages(
-    id          INTEGER     PRIMARY KEY,
+    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
     name        TEXT        NOT NULL,
     content     TEXT        NOT NULL,
-    timestamp   DATETIME    NOT NULL
+    ip          TEXT        NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS visitors(

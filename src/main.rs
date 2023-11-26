@@ -19,27 +19,20 @@ use actix_files::{Files, NamedFile};
 use actix_web::web;
 use actix_web::{middleware, web::Data, App, HttpServer};
 use db::Db;
+use game::GameMessage;
 use log::info;
-use serde::{Deserialize, Serialize};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Mutex;
 
 use std::collections::VecDeque;
-use std::net::IpAddr;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 
 #[derive(Default, Debug)]
 struct AppState {
-    visitors: AtomicU64,
-    messages: Mutex<VecDeque<(String, String, IpAddr)>>,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct NonSyncAppState {
-    visitors: u64,
-    messages: VecDeque<(String, String, IpAddr)>,
+    visitors: AtomicI64,
+    messages: Mutex<VecDeque<GameMessage>>,
 }
 
 #[derive(Debug)]
@@ -49,7 +42,6 @@ struct AppData {
     db: Db,
 }
 
-const STATE_FILE: &str = "state.json";
 const DATABASE_FILE: &str = "data.sqlite";
 const PEPPER_FILE: &str = "pepper";
 #[cfg(feature = "prepare_db")]
@@ -68,7 +60,11 @@ async fn main() {
 async fn main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    let dict_file = BufReader::new(File::open("res/words_alpha.txt").await?);
+    let dict_file = BufReader::new(
+        File::open("res/words_alpha.txt")
+            .await
+            .expect("dictionary file couldn't be opened"),
+    );
     let mut dictionary = vec![];
 
     let mut lines = dict_file.lines();
@@ -79,12 +75,15 @@ async fn main() -> std::io::Result<()> {
         dictionary.push(&*Box::leak(line.into_boxed_str()));
     }
 
-    let pepper = tokio::fs::read(PEPPER_FILE).await.unwrap();
+    let pepper = tokio::fs::read(PEPPER_FILE)
+        .await
+        .expect("pepper file couldn't be opened");
+    let db = Db::new(DATABASE_FILE, pepper.leak()).await;
 
     let data = Data::new(AppData {
-        state: load_state().await,
+        state: load_state(&db).await,
         dictionary: dictionary.leak(),
-        db: Db::new(DATABASE_FILE, pepper.leak()).await,
+        db,
     });
 
     let server = {
@@ -115,83 +114,35 @@ async fn main() -> std::io::Result<()> {
     };
 
     let _ = if cfg!(debug_assertions) {
-        log::info!("starting HTTP server at http://localhost:8080");
+        info!("starting HTTP server at http://localhost:8080");
         server.bind("localhost:8080")?
     } else {
         let config = ssl::load_rustls_config();
 
-        log::info!("starting HTTPS server at https://[::]:443");
+        info!("starting HTTPS server at https://[::]:443");
         server.bind_rustls("[::]:443", config)?
     }
     .run()
     .await;
 
-    save_state(Arc::try_unwrap(data.into_inner()).unwrap().state).await;
+    let data = Arc::try_unwrap(data.into_inner()).unwrap();
+    save_state(data.state, &data.db).await;
     Ok(())
 }
 
-async fn load_state() -> AppState {
-    let maybe_state = tokio::task::spawn_blocking(|| {
-        use std::fs::File;
-        use std::io::BufReader;
+async fn load_state(db: &Db) -> AppState {
+    let visitors = db.get_visitors().await;
+    let messages = db.get_messages().await;
 
-        File::open(STATE_FILE)
-            .ok()
-            .map(BufReader::new)
-            .map(serde_json::from_reader::<_, NonSyncAppState>)
-    })
-    .await
-    .unwrap();
-
-    match maybe_state.and_then(Result::ok).map(Into::into) {
-        Some(state) => {
-            info!("Found and loaded state.");
-            state
-        }
-        None => {
-            info!("Couldn't load state - resetting to default.");
-            Default::default()
-        }
+    AppState {
+        visitors: AtomicI64::new(visitors),
+        messages: Mutex::new(messages.into()),
     }
 }
 
-async fn save_state(state: AppState) {
-    let state: NonSyncAppState = state.into();
-
-    tokio::task::spawn_blocking(move || {
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(STATE_FILE)
-            .unwrap();
-
-        serde_json::to_writer_pretty(&mut file, &state).unwrap();
-    })
-    .await
-    .unwrap();
-
-    info!("Successfully saved state.")
-}
-
-impl From<AppState> for NonSyncAppState {
-    fn from(state: AppState) -> Self {
-        let AppState { visitors, messages } = state;
-
-        Self {
-            visitors: visitors.into_inner(),
-            messages: messages.into_inner(),
-        }
-    }
-}
-
-impl From<NonSyncAppState> for AppState {
-    fn from(state: NonSyncAppState) -> Self {
-        let NonSyncAppState { visitors, messages } = state;
-
-        Self {
-            visitors: visitors.into(),
-            messages: Mutex::new(messages),
-        }
-    }
+async fn save_state(state: AppState, db: &Db) {
+    let AppState { visitors, messages } = state;
+    db.set_visitors(visitors.into_inner()).await;
+    db.set_messages(messages.into_inner().make_contiguous())
+        .await;
 }

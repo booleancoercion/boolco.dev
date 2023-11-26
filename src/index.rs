@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 #[derive(Template)]
 #[template(path = "index.html")]
 struct IndexTemplate {
-    visitors: u64,
+    visitors: i64,
 }
 
 #[get("/")]
