@@ -69,7 +69,6 @@ form li+li {
 label {
     /* Uniform size & alignment */
     display: block;
-    width: 90px;
     text-align: left;
     font-size: 1em;
 }
