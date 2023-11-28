@@ -33,6 +33,7 @@ INSERT OR IGNORE INTO visitors (id, visitors) VALUES (0, 0);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name ON users (name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_name ON registration_tickets (name);
 "
         )
         .execute(&pool)
@@ -74,7 +75,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
         }
     }
 
-    pub async fn register_user(&self, ticket: &str, username: &str, password: &str) -> Option<i64> {
+    pub async fn register_user(&self, ticket: &str, password: &str) -> Option<i64> {
         let salt = SaltString::generate(&mut OsRng);
         let hash = self
             .argon2
@@ -84,7 +85,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
 
         let mut transaction = self.pool.begin().await.unwrap();
 
-        let user_id = match query!(
+        let username = if let Ok(rec) = query!(
+            "DELETE FROM registration_tickets WHERE ticket = ? RETURNING name;",
+            ticket
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        {
+            rec.name
+        } else {
+            return None; // rolls back the transaction
+        };
+
+        match query!(
             "INSERT INTO users (name, password_hash) VALUES (?, ?) RETURNING id;",
             username,
             hash
@@ -92,26 +105,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
         .fetch_one(&mut *transaction)
         .await
         {
-            Ok(rec) => rec.id,
-            Err(_) => return None, // rolls back the transaction
-        };
-
-        if query!(
-            "DELETE FROM registration_tickets WHERE ticket = ? RETURNING id;",
-            ticket
-        )
-        .fetch_one(&mut *transaction)
-        .await
-        .is_ok()
-        {
-            transaction.commit().await.unwrap();
-            Some(user_id)
-        } else {
-            None // rolls back the transaction
+            Ok(rec) => {
+                transaction.commit().await.unwrap();
+                Some(rec.id)
+            }
+            Err(_) => None, // rolls back the transaction
         }
     }
 
-    pub async fn generate_registration_ticket(&self) -> String {
+    pub async fn generate_registration_ticket(&self, name: &str) -> Option<String> {
+        let mut transaction = self.pool.begin().await.unwrap();
+
+        if sqlx::query_scalar::<_, i64>(
+            "SELECT EXISTS(SELECT 1 FROM registration_tickets WHERE name = ?);",
+        )
+        .bind(name)
+        .fetch_one(&mut *transaction)
+        .await
+        .unwrap()
+            == 1
+        {
+            return None;
+        }
+
+        if sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users WHERE name = ?);")
+            .bind(name)
+            .fetch_one(&mut *transaction)
+            .await
+            .unwrap()
+            == 1
+        {
+            return None;
+        }
+
         // *theoretically*, there is an astronomically small chance of a collision here,
         // so we have a loop.
         loop {
@@ -120,14 +146,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
             let ticket = TICKET_ENGINE.encode(bytes);
 
             if query!(
-                "INSERT INTO registration_tickets (ticket) VALUES (?);",
+                "INSERT INTO registration_tickets (name, ticket) VALUES (?, ?);",
+                name,
                 ticket
             )
-            .execute(&self.pool)
+            .execute(&mut *transaction)
             .await
             .is_ok()
             {
-                break ticket;
+                transaction.commit().await.unwrap();
+                break Some(ticket);
             }
         }
     }
@@ -219,6 +247,7 @@ CREATE TABLE IF NOT EXISTS user_permissions(
 
 CREATE TABLE IF NOT EXISTS registration_tickets(
     id      INTEGER NOT NULL PRIMARY KEY,
+    name    TEXT    NOT NULl UNIQUE,
     ticket  TEXT    NOT NULL UNIQUE
 );"
     )

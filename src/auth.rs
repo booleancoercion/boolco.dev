@@ -68,19 +68,15 @@ struct LoginForm {
     password: String,
 }
 
-fn verify_user_password(username: &str, password: &str) -> bool {
-    if !(1..=64).contains(&username.len()) || !(8..=64).contains(&password.len()) {
-        return false;
-    }
+fn verify_username(username: &str) -> bool {
+    (1..=64).contains(&username.len())
+        && username
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
 
-    if !username
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b == b'_')
-    {
-        return false;
-    }
-
-    true
+fn verify_password(password: &str) -> bool {
+    (8..=64).contains(&password.len())
 }
 
 #[post("/login")]
@@ -99,7 +95,7 @@ async fn login_post(
             .finish();
     }
 
-    if verify_user_password(&form.username, &form.password) {
+    if verify_username(&form.username) && verify_password(&form.password) {
         if let Some(id) = data.db.verify_user(&form.username, &form.password).await {
             session
                 .insert(session_keys::SUCCESSFUL, "logged in")
@@ -122,9 +118,13 @@ async fn login_post(
 
 #[derive(Serialize, Deserialize)]
 struct RegisterForm {
-    username: String,
     password: String,
     ticket: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RegisterQuery {
+    name: String,
 }
 
 #[post("/register")]
@@ -132,6 +132,7 @@ async fn register_post(
     req: HttpRequest,
     data: Data<crate::AppData>,
     form: Option<web::Form<RegisterForm>>,
+    query: Option<web::Query<RegisterQuery>>,
     session: Session,
 ) -> impl Responder {
     if session
@@ -145,12 +146,8 @@ async fn register_post(
     }
 
     if let Some(form) = form {
-        if verify_user_password(&form.username, &form.password) {
-            if let Some(id) = data
-                .db
-                .register_user(&form.ticket, &form.username, &form.password)
-                .await
-            {
+        if verify_password(&form.password) {
+            if let Some(id) = data.db.register_user(&form.ticket, &form.password).await {
                 session
                     .insert(session_keys::SUCCESSFUL, "registered")
                     .unwrap();
@@ -165,8 +162,13 @@ async fn register_post(
             }
         }
     } else if req.peer_addr().unwrap().ip().is_loopback() {
-        return HttpResponseBuilder::new(StatusCode::OK)
-            .body(data.db.generate_registration_ticket().await);
+        if let Some(query) = query {
+            if let Some(ticket) = data.db.generate_registration_ticket(&query.name).await {
+                return HttpResponseBuilder::new(StatusCode::OK).body(ticket);
+            }
+        }
+
+        return HttpResponseBuilder::new(StatusCode::BAD_REQUEST).finish();
     }
 
     HttpResponseBuilder::new(StatusCode::FORBIDDEN)

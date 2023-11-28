@@ -16,26 +16,21 @@
 
             {% if failed %}
             <p style="font: 1em monospace; color: red;">
-                Invalid attempt. Please make sure that you have a valid token, the username/password are in the correct format, <br>
-                and your username is not already in use by someone else.
+                Invalid attempt. Please make sure that you have a valid token and that <br>
+                your password is in the correct format.
             </p>
             {% endif %}
 
             <form action="/register" method="post">
                 <ul>
                     <li>
-                        <label for="username">Username:</label>
-                        <input autocomplete="username" id="username" name="username" 
-                        maxlength="64" required pattern="[a-zA-Z0-9_]+"/>
+                        <label for="ticket">Ticket:</label>
+                        <input id="ticket" name="ticket" autocomplete="off"/>
                     </li>
                     <li>
                         <label for="new-password">Password:</label>
                         <input autocomplete="new-password" id="new-password" name="password"
                         type="password" maxlength="64" minlength="8"/>
-                    </li>
-                    <li>
-                        <label for="ticket">Ticket:</label>
-                        <input id="ticket" name="ticket" autocomplete="off"/>
                     </li>
             
                     <li class="button">
@@ -45,8 +40,7 @@
             </form>
 
             <p style="font: 1em monospace;">
-                Username must be between 1-64 characters, and must only include alphanumeric or _ characters. <br>
-                Password must be between 8-64 characters, and must only include printable ASCII characters.
+                Password must be between 8-64 characters.
             </p>
         </div>
     </body>
