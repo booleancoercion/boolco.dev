@@ -146,7 +146,7 @@ async fn register_post(
     }
 
     if let Some(form) = form {
-        if verify_password(&form.password) {
+        if verify_password(&form.password) && form.ticket.len() <= 512 {
             if let Some(id) = data.db.register_user(&form.ticket, &form.password).await {
                 session
                     .insert(session_keys::SUCCESSFUL, "registered")
