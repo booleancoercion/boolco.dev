@@ -13,6 +13,13 @@
     <body>
         <div class="center">
             <h1>Login</h1>
+
+            {% if failed %}
+            <p style="font: 1em monospace; color: red;">
+                Incorrect username or password.
+            </p>
+            {% endif %}
+
             <form action="/login" method="post">
                 <ul>
                     <li>
@@ -23,7 +30,7 @@
                     <li>
                         <label for="current-password">Password:</label>
                         <input autocomplete="current-password" id="current-password" name="password"
-                        type="password" maxlength="64" minlength="8" pattern="[ -~]+"/>
+                        type="password" maxlength="64" minlength="8"/>
                     </li>
             
                     <li class="button">

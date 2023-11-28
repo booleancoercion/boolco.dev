@@ -2,8 +2,8 @@
 
 mod db;
 
+const KEY_ENGINE: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 const DATABASE_FILE: &str = "data.sqlite";
-const PEPPER_FILE: &str = "pepper";
 #[cfg(feature = "prepare_db")]
 const SCHEMA_FILE: &str = "schema.sqlite";
 
@@ -36,8 +36,13 @@ mod inner {
 
     use crate::db::Db;
     use actix_files::{Files, NamedFile};
+    use actix_session::config::PersistentSession;
+    use actix_session::storage::RedisActorSessionStore;
+    use actix_session::SessionMiddleware;
+    use actix_web::cookie::time::Duration;
     use actix_web::web;
     use actix_web::{middleware, web::Data, App, HttpServer};
+    use base64::Engine;
     use game::GameMessage;
     use log::info;
     use serde::{Deserialize, Serialize};
@@ -54,6 +59,8 @@ mod inner {
         bind_addr: Option<String>,
         workers: Option<usize>,
         ssl: Option<SslConfig>,
+        crypt: Keychain,
+        session: SessionConfig,
     }
 
     const fn bool_as_true() -> bool {
@@ -66,6 +73,17 @@ mod inner {
         key: String,
         #[serde(default = "bool_as_true")]
         enabled: bool,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct Keychain {
+        pepper: String,
+        cookie: String,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct SessionConfig {
+        redis_connection_string: String,
     }
 
     #[derive(Default, Debug)]
@@ -91,24 +109,16 @@ mod inner {
         )
         .expect("invalid config.toml format");
 
-        let dict_file = BufReader::new(
-            File::open("res/words_alpha.txt")
-                .await
-                .expect("dictionary file couldn't be opened"),
-        );
-        let mut dictionary = vec![];
+        let dictionary = init_dictionary("res/words_alpha.txt").await;
 
-        let mut lines = dict_file.lines();
-        while let Some(line) = lines.next_line().await.unwrap() {
-            if line.len() < 3 {
-                continue;
-            }
-            dictionary.push(&*Box::leak(line.into_boxed_str()));
-        }
-
-        let pepper = tokio::fs::read(crate::PEPPER_FILE)
-            .await
-            .expect("pepper file couldn't be opened");
+        let pepper = crate::KEY_ENGINE
+            .decode(config.crypt.pepper)
+            .expect("couldn't decode pepper");
+        let cookie_key = crate::KEY_ENGINE
+            .decode(config.crypt.cookie)
+            .expect("couldn't decode cookie key");
+        let cookie_key = actix_web::cookie::Key::try_from(&*cookie_key)
+            .expect("cookie key is too short (must be at least 64 bytes)");
         let db = Db::new(crate::DATABASE_FILE, pepper.leak()).await;
 
         let data = Data::new(AppData {
@@ -124,6 +134,20 @@ mod inner {
                     .app_data(data.clone())
                     // enable logger
                     .wrap(middleware::Logger::default())
+                    // add redis-backed session storage
+                    .wrap(
+                        SessionMiddleware::builder(
+                            RedisActorSessionStore::new(
+                                config.session.redis_connection_string.clone(),
+                            ),
+                            cookie_key.clone(),
+                        )
+                        .session_lifecycle(
+                            PersistentSession::default().session_ttl(Duration::weeks(1)),
+                        )
+                        .cookie_same_site(actix_web::cookie::SameSite::Strict)
+                        .build(),
+                    )
                     // register simple handler, handle all methods
                     .service(index::index)
                     .service(game::game_get)
@@ -135,6 +159,7 @@ mod inner {
                     .service(auth::login_post)
                     .service(auth::register_get)
                     .service(auth::register_post)
+                    .service(auth::logout)
                     .service(Files::new("/static", "static").show_files_listing())
                     .route(
                         "/favicon.ico",
@@ -175,6 +200,25 @@ mod inner {
         let data = Arc::try_unwrap(data.into_inner()).unwrap();
         save_state(data.state, &data.db).await;
         Ok(())
+    }
+
+    async fn init_dictionary(filename: &str) -> Vec<&str> {
+        let dict_file = BufReader::new(
+            File::open(filename)
+                .await
+                .expect("dictionary file couldn't be opened"),
+        );
+        let mut dictionary = vec![];
+
+        let mut lines = dict_file.lines();
+        while let Some(line) = lines.next_line().await.unwrap() {
+            if line.len() < 3 {
+                continue;
+            }
+            dictionary.push(&*Box::leak(line.into_boxed_str()));
+        }
+
+        dictionary
     }
 
     async fn load_state(db: &Db) -> AppState {

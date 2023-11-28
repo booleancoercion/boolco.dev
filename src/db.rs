@@ -50,23 +50,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
         Db { pool, argon2 }
     }
 
-    pub async fn verify_user(&self, username: &str, password: &str) -> bool {
-        let Ok(hash) = query!("SELECT password_hash FROM users WHERE name = ?;", username)
-            .fetch_one(&self.pool)
-            .await
-            .map(|x| x.password_hash)
+    pub async fn verify_user(&self, username: &str, password: &str) -> Option<i64> {
+        let Ok(rec) = query!(
+            "SELECT id, password_hash FROM users WHERE name = ?;",
+            username
+        )
+        .fetch_one(&self.pool)
+        .await
         else {
-            return false;
+            return None;
         };
 
         // hashes in the DB are expected to be valid
-        let hash = PasswordHash::parse(&hash, HASH_ENCODING).unwrap();
-        self.argon2
+        let hash = PasswordHash::parse(&rec.password_hash, HASH_ENCODING).unwrap();
+        if self
+            .argon2
             .verify_password(password.as_bytes(), &hash)
             .is_ok()
+        {
+            Some(rec.id)
+        } else {
+            None
+        }
     }
 
-    pub async fn insert_user(&self, ticket: &str, username: &str, password: &str) -> bool {
+    pub async fn register_user(&self, ticket: &str, username: &str, password: &str) -> Option<i64> {
         let salt = SaltString::generate(&mut OsRng);
         let hash = self
             .argon2
@@ -74,21 +82,33 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
             .unwrap()
             .to_string();
 
-        query!(
-            "\
-BEGIN TRANSACTION;
-INSERT INTO users (name, password_hash) SELECT ?, ? FROM registration_tickets WHERE ticket = ?;
-DELETE FROM registration_tickets WHERE ticket = ? RETURNING id;
-COMMIT TRANSACTION;",
+        let mut transaction = self.pool.begin().await.unwrap();
+
+        let user_id = match query!(
+            "INSERT INTO users (name, password_hash) VALUES (?, ?) RETURNING id;",
             username,
-            hash,
-            ticket,
+            hash
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        {
+            Ok(rec) => rec.id,
+            Err(_) => return None, // rolls back the transaction
+        };
+
+        if query!(
+            "DELETE FROM registration_tickets WHERE ticket = ? RETURNING id;",
             ticket
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&mut *transaction)
         .await
-        .unwrap()
-        .is_some()
+        .is_ok()
+        {
+            transaction.commit().await.unwrap();
+            Some(user_id)
+        } else {
+            None // rolls back the transaction
+        }
     }
 
     pub async fn generate_registration_ticket(&self) -> String {
@@ -99,19 +119,25 @@ COMMIT TRANSACTION;",
             OsRng.fill_bytes(&mut bytes);
             let ticket = TICKET_ENGINE.encode(bytes);
 
-            if dbg!(
-                query!(
-                    "INSERT INTO registration_tickets (ticket) VALUES (?);",
-                    ticket
-                )
-                .execute(&self.pool)
-                .await
+            if query!(
+                "INSERT INTO registration_tickets (ticket) VALUES (?);",
+                ticket
             )
+            .execute(&self.pool)
+            .await
             .is_ok()
             {
                 break ticket;
             }
         }
+    }
+
+    pub async fn get_username(&self, id: i64) -> Option<String> {
+        query!("SELECT name FROM users WHERE id = ?;", id)
+            .fetch_optional(&self.pool)
+            .await
+            .unwrap()
+            .map(|x| x.name)
     }
 
     pub async fn get_visitors(&self) -> i64 {
@@ -169,30 +195,30 @@ async fn create_tables(conn: impl sqlx::SqliteExecutor<'_>) {
     query!(
         "\
 CREATE TABLE IF NOT EXISTS messages(
-    id          INTEGER     PRIMARY KEY AUTOINCREMENT,
+    id          INTEGER     NOT NULL PRIMARY KEY AUTOINCREMENT,
     name        TEXT        NOT NULL,
     content     TEXT        NOT NULL,
     ip          TEXT        NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS visitors(
-    id          INTEGER     PRIMARY KEY,
+    id          INTEGER     NOT NULL PRIMARY KEY,
     visitors    INTEGER     NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS users(
-    id              INTEGER PRIMARY KEY,
+    id              INTEGER NOT NULL PRIMARY KEY,
     name            TEXT    NOT NULL UNIQUE,
     password_hash   TEXT    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_permissions(
-    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    user_id INTEGER NOT NULL PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
     admin   BOOLEAN NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS registration_tickets(
-    id      INTEGER PRIMARY KEY,
+    id      INTEGER NOT NULL PRIMARY KEY,
     ticket  TEXT    NOT NULL UNIQUE
 );"
     )

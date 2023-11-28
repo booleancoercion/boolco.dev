@@ -10,3 +10,4 @@ state.json
 *.sqlite
 pepper
 config.toml
+dump.rdb

@@ -44,3 +44,13 @@ p {
     line-height: 28px;
     text-shadow: 1px 1px 1px black;
 }
+
+footer form {
+    display: inline-block;
+}
+
+button {
+    font-weight: bold;
+    background-color: #D48268;
+    color: white;
+}

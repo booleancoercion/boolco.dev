@@ -17,6 +17,11 @@
     <body>
         <div class="main">
         <div class="center">
+            {% if let Some(successful) = successful %}
+            <p style="font: 1em monospace; color: greenyellow;">
+                Successfully {{ successful }}!
+            </p>
+            {% endif %}
             <h1>
                 <span style="font-family: 'Roboto', sans-serif;">Graphic</span>
                 <span style="font-family: 'Edu TAS Beginner', cursive;">design</span>
@@ -31,7 +36,17 @@
             </p>
         </div>
         <footer>
-            Written by boolean_coercion. Source: <a href="https://github.com/booleancoercion/boolco.dev">GitHub</a>.
+            {% if let Some(logged_in) = logged_in %}
+            Welcome, {{ logged_in }}.
+
+            <form action="/logout" method="post" style="display: inline-block;">
+                <button type="submit" name="logout" value="logout">Logout</button>
+            </form>            
+            {% else %}
+            <a href="/login">Login</a> / <a href="/register">Register</a>
+            {% endif %}
+
+            | Written by boolean_coercion. Source: <a href="https://github.com/booleancoercion/boolco.dev">GitHub</a>.
         </footer>
         </div>
     </body>
