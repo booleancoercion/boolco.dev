@@ -1,10 +1,14 @@
 use actix_session::Session;
-use actix_web::{get, web::Data, Responder};
+use actix_web::{
+    get,
+    web::{Data, ReqData},
+    Responder,
+};
 use askama::Template;
 
 use std::sync::atomic::Ordering;
 
-use crate::auth::{session_keys, LoggedInUser};
+use crate::auth::{middleware::Login, session_keys};
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -15,7 +19,11 @@ struct IndexTemplate {
 }
 
 #[get("/")]
-async fn index(data: Data<crate::AppData>, session: Session) -> impl Responder {
+async fn index(
+    data: Data<crate::AppData>,
+    session: Session,
+    login: ReqData<Login>,
+) -> impl Responder {
     let visitors = data.state.visitors.fetch_add(1, Ordering::SeqCst) + 1;
 
     let successful = if let Ok(Some(what)) = session.get::<String>(session_keys::SUCCESSFUL) {
@@ -25,24 +33,9 @@ async fn index(data: Data<crate::AppData>, session: Session) -> impl Responder {
         None
     };
 
-    let logged_in =
-        if let Ok(Some(logged_in)) = session.get::<LoggedInUser>(session_keys::LOGGED_IN) {
-            let name = data.db.get_username(logged_in.id).await;
-
-            if let Some(name) = name {
-                session.renew();
-                Some(name)
-            } else {
-                session.remove(session_keys::LOGGED_IN);
-                None
-            }
-        } else {
-            None
-        };
-
     IndexTemplate {
         visitors,
         successful,
-        logged_in,
+        logged_in: login.info().map(|x| x.name.clone()),
     }
 }

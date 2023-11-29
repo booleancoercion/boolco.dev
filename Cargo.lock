@@ -2584,6 +2584,7 @@ dependencies = [
  "askama_actix",
  "base64 0.21.5",
  "env_logger",
+ "futures-util",
  "log",
  "poingus",
  "rustls 0.20.9",

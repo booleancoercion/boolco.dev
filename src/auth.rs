@@ -1,20 +1,19 @@
 use actix_session::Session;
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
-use actix_web::web::{self, Data};
+use actix_web::web::{self, Data, ReqData};
 use actix_web::{get, post, HttpRequest, HttpResponseBuilder, Responder};
 use askama::Template;
 use serde::{Deserialize, Serialize};
+
+use crate::auth::middleware::Login;
 
 pub mod session_keys {
     pub const LOGGED_IN: &str = "logged_in";
     pub const SUCCESSFUL: &str = "successful";
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct LoggedInUser {
-    pub id: i64,
-}
+pub mod middleware;
 
 #[derive(Template)]
 #[template(path = "login.html")]
@@ -29,12 +28,8 @@ struct RegisterTemplate {
 }
 
 #[get("/login")]
-async fn login_get(session: Session) -> impl Responder {
-    if session
-        .get::<LoggedInUser>(session_keys::LOGGED_IN)
-        .unwrap()
-        .is_some()
-    {
+async fn login_get(login: ReqData<Login>) -> impl Responder {
+    if login.info().is_some() {
         HttpResponseBuilder::new(StatusCode::SEE_OTHER)
             .insert_header(("Location", "/"))
             .finish()
@@ -46,12 +41,8 @@ async fn login_get(session: Session) -> impl Responder {
 }
 
 #[get("/register")]
-async fn register_get(session: Session) -> impl Responder {
-    if session
-        .get::<LoggedInUser>(session_keys::LOGGED_IN)
-        .unwrap()
-        .is_some()
-    {
+async fn register_get(login: ReqData<Login>) -> impl Responder {
+    if login.info().is_some() {
         HttpResponseBuilder::new(StatusCode::SEE_OTHER)
             .insert_header(("Location", "/"))
             .finish()
@@ -84,12 +75,9 @@ async fn login_post(
     data: Data<crate::AppData>,
     form: web::Form<LoginForm>,
     session: Session,
+    login: ReqData<Login>,
 ) -> impl Responder {
-    if session
-        .get::<LoggedInUser>(session_keys::LOGGED_IN)
-        .unwrap()
-        .is_some()
-    {
+    if login.info().is_some() {
         return HttpResponseBuilder::new(StatusCode::SEE_OTHER)
             .insert_header(("Location", "/"))
             .finish();
@@ -100,10 +88,7 @@ async fn login_post(
             session
                 .insert(session_keys::SUCCESSFUL, "logged in")
                 .unwrap();
-            session
-                .insert(session_keys::LOGGED_IN, LoggedInUser { id })
-                .unwrap();
-            session.renew();
+            login.login(id);
 
             return HttpResponseBuilder::new(StatusCode::SEE_OTHER)
                 .insert_header(("Location", "/"))
@@ -134,12 +119,9 @@ async fn register_post(
     form: Option<web::Form<RegisterForm>>,
     query: Option<web::Query<RegisterQuery>>,
     session: Session,
+    login: ReqData<Login>,
 ) -> impl Responder {
-    if session
-        .get::<LoggedInUser>(session_keys::LOGGED_IN)
-        .unwrap()
-        .is_some()
-    {
+    if login.info().is_some() {
         return HttpResponseBuilder::new(StatusCode::SEE_OTHER)
             .insert_header(("Location", "/"))
             .finish();
@@ -151,10 +133,7 @@ async fn register_post(
                 session
                     .insert(session_keys::SUCCESSFUL, "registered")
                     .unwrap();
-                session
-                    .insert(session_keys::LOGGED_IN, LoggedInUser { id })
-                    .unwrap();
-                session.renew();
+                login.login(id);
 
                 return HttpResponseBuilder::new(StatusCode::SEE_OTHER)
                     .insert_header(("Location", "/"))
@@ -177,8 +156,8 @@ async fn register_post(
 }
 
 #[post("/logout")]
-async fn logout(session: Session) -> impl Responder {
-    if session.remove(session_keys::LOGGED_IN).is_some() {
+async fn logout(session: Session, login: ReqData<Login>) -> impl Responder {
+    if login.logout() {
         session
             .insert(session_keys::SUCCESSFUL, "logged out")
             .unwrap();

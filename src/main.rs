@@ -134,6 +134,8 @@ mod inner {
                     .app_data(data.clone())
                     // enable logger
                     .wrap(middleware::Logger::default())
+                    // logged-in user handling via middleware
+                    .wrap(auth::middleware::Auth)
                     // add redis-backed session storage
                     .wrap(
                         SessionMiddleware::builder(
