@@ -161,6 +161,7 @@ mod inner {
                     .service(auth::login_post)
                     .service(auth::register_get)
                     .service(auth::register_post)
+                    .service(auth::register_path_post)
                     .service(auth::logout)
                     .service(Files::new("/static", "static").show_files_listing())
                     .route(

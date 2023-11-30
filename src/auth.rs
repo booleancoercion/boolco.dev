@@ -114,10 +114,8 @@ struct RegisterQuery {
 
 #[post("/register")]
 async fn register_post(
-    req: HttpRequest,
     data: Data<crate::AppData>,
     form: Option<web::Form<RegisterForm>>,
-    query: Option<web::Query<RegisterQuery>>,
     session: Session,
     login: ReqData<Login>,
 ) -> impl Responder {
@@ -140,19 +138,28 @@ async fn register_post(
                     .finish();
             }
         }
-    } else if req.peer_addr().unwrap().ip().is_loopback() {
-        if let Some(query) = query {
-            if let Some(ticket) = data.db.generate_registration_ticket(&query.name).await {
-                return HttpResponseBuilder::new(StatusCode::OK).body(ticket);
-            }
-        }
-
-        return HttpResponseBuilder::new(StatusCode::BAD_REQUEST).finish();
     }
 
     HttpResponseBuilder::new(StatusCode::FORBIDDEN)
         .content_type(ContentType::html())
         .body(RegisterTemplate { failed: true }.to_string())
+}
+
+#[post("/register/{name}")]
+async fn register_path_post(
+    req: HttpRequest,
+    data: Data<crate::AppData>,
+    path: web::Path<String>,
+) -> impl Responder {
+    if let Some(true) = req.peer_addr().map(|x| x.ip().is_loopback()) {
+        if let Some(ticket) = data.db.generate_registration_ticket(&path).await {
+            HttpResponseBuilder::new(StatusCode::OK).body(ticket)
+        } else {
+            HttpResponseBuilder::new(StatusCode::BAD_REQUEST).finish()
+        }
+    } else {
+        HttpResponseBuilder::new(StatusCode::NOT_FOUND).finish()
+    }
 }
 
 #[post("/logout")]
