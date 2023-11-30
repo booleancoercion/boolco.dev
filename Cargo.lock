@@ -2587,6 +2587,7 @@ dependencies = [
  "futures-util",
  "log",
  "poingus",
+ "rand",
  "rustls 0.20.9",
  "rustls-pemfile",
  "serde",
@@ -2595,6 +2596,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "toml 0.8.8",
+ "url",
 ]
 
 [[package]]

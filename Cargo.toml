@@ -32,6 +32,8 @@ base64 = "0.21.5"
 toml = "0.8.8"
 actix-session = { version = "0.8.0", features = ["redis-actor-session"] }
 futures-util = "0.3.29"
+url = "2.5.0"
+rand = "0.8.5"
 
 [profile.release]
 strip = "symbols"

@@ -8,7 +8,7 @@ use askama::Template;
 
 use std::sync::atomic::Ordering;
 
-use crate::auth::{middleware::Login, session_keys};
+use crate::auth::middleware::Login;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -26,8 +26,9 @@ async fn index(
 ) -> impl Responder {
     let visitors = data.state.visitors.fetch_add(1, Ordering::SeqCst) + 1;
 
-    let successful = if let Ok(Some(what)) = session.get::<String>(session_keys::SUCCESSFUL) {
-        session.remove(session_keys::SUCCESSFUL);
+    let successful = if let Ok(Some(what)) = session.get::<String>(crate::session_keys::SUCCESSFUL)
+    {
+        session.remove(crate::session_keys::SUCCESSFUL);
         Some(what)
     } else {
         None

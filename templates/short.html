@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>boolco.dev - link shortener</title>
+        <link rel="stylesheet" href="/static/style/short.css" />
+
+        <link rel="apple-touch-icon" sizes="180x180" href="/static/browser_stuff/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/static/browser_stuff/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/static/browser_stuff/favicon-16x16.png">
+        <link rel="manifest" href="/static/browser_stuff/site.webmanifest">
+    </head>
+    <body>
+        <div class="center">
+            <h1>Link Shortening</h1>
+
+            {% if let Some(newshort) = newshort %}
+            <p style="font: 1em monospace; color: green;">
+                New short link created: https://boolco.dev/short/{{newshort}}
+            </p>
+            {% endif %}
+
+            {% if let Some(error) = error %}
+            <p style="font: 1em monospace; color: red; max-width: 80%;">
+                {{error}}
+            </p>
+            {% endif %}
+
+            <form action="/short" method="post" class="new_short">
+                <ul>
+                    <li>
+                        <label for="link">Link to shorten:</label>
+                        <input id="link" name="link" autocomplete="off" style="width: 600px;"/>
+                    </li>
+                    <li>
+                        <label for="shortstring">Short string (optional):</label>
+                        <input id="shortstring" name="shortstring" style="width: 150px;"/>
+                    </li>
+            
+                    <li>
+                        <button type="submit">Submit</button>
+                    </li>
+                </ul>
+            </form>
+
+            {% if links.len() > 0 %}
+            <h2>Your shortened links:</h2>
+            <div class="table">
+                
+                {% for link in links %}
+                    
+                <div class="td">{{ link.short }}</div>
+                <div class="td"><div class="url"><a href="{{ link.url }}">{{ link.url }}</a></div></div>
+                <div class="td">
+                    <form action="delete_short" method="post">
+                        <input name="short" type="hidden" value="{{ link.short }}"/>
+                        <button type="submit">Delete</button>
+                    </form>
+                </div>
+                    
+                {% endfor %}
+                
+            </div>
+            {% endif %}
+        </div>
+    </body>
+</html>
+

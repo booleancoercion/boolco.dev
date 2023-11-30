@@ -68,12 +68,12 @@ button {
     font-weight: bold;
     background-color: #D48268;
     color: white;
-    font-size: 20px;
+    font-size: 20pt;
 }
 
 #answer {
     margin: 100px;
-    font-size: 20px
+    font-size: 20pt
 }
 
 #answer_title {

@@ -3,6 +3,8 @@ html {
     background-color: #bbe4f0;
     height: 100%;
     margin: 0px;
+    font-size: 14pt;
+    line-height: 20pt;
 }
 
 .main {
@@ -24,24 +26,20 @@ footer {
     background-color: #68bad4;
     font-family: monospace;
     padding: 5px;
-    font-size: 14px;
 }
 
 h1 {
-    font-size: 60px;
+    font-size: 60pt;
     text-align: center;
     color: #63a33b;
     text-shadow: 1px 1px 1px black;
-    line-height: 28px;
 }
 
 p {
-    font-size: 20px;
     font-weight: bold;
     font-family: sans-serif;
     text-align: center;
     color: #e28418;
-    line-height: 28px;
     text-shadow: 1px 1px 1px black;
 }
 

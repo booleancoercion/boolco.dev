@@ -8,11 +8,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::middleware::Login;
 
-pub mod session_keys {
-    pub const LOGGED_IN: &str = "logged_in";
-    pub const SUCCESSFUL: &str = "successful";
-}
-
 pub mod middleware;
 
 #[derive(Template)]
@@ -86,7 +81,7 @@ async fn login_post(
     if verify_username(&form.username) && verify_password(&form.password) {
         if let Some(id) = data.db.verify_user(&form.username, &form.password).await {
             session
-                .insert(session_keys::SUCCESSFUL, "logged in")
+                .insert(crate::session_keys::SUCCESSFUL, "logged in")
                 .unwrap();
             login.login(id);
 
@@ -129,7 +124,7 @@ async fn register_post(
         if verify_password(&form.password) && form.ticket.len() <= 512 {
             if let Some(id) = data.db.register_user(&form.ticket, &form.password).await {
                 session
-                    .insert(session_keys::SUCCESSFUL, "registered")
+                    .insert(crate::session_keys::SUCCESSFUL, "registered")
                     .unwrap();
                 login.login(id);
 
@@ -166,7 +161,7 @@ async fn register_path_post(
 async fn logout(session: Session, login: ReqData<Login>) -> impl Responder {
     if login.logout() {
         session
-            .insert(session_keys::SUCCESSFUL, "logged out")
+            .insert(crate::session_keys::SUCCESSFUL, "logged out")
             .unwrap();
     }
 

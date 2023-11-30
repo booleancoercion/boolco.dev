@@ -9,6 +9,8 @@ use actix_web::{Error, HttpMessage};
 use futures_util::future::LocalBoxFuture;
 use serde::{Deserialize, Serialize};
 
+use crate::db::UserPermissions;
+
 // There are two steps in middleware processing.
 // 1. Middleware initialization, middleware factory gets called with
 //    next service in chain as parameter.
@@ -62,18 +64,20 @@ where
             let data = req.app_data::<Data<crate::AppData>>().unwrap();
 
             let info = if let Some(logged_in) = session
-                .get::<LoggedInUserSessionData>(super::session_keys::LOGGED_IN)
+                .get::<LoggedInUserSessionData>(crate::session_keys::LOGGED_IN)
                 .unwrap()
             {
                 let name = data.db.get_username(logged_in.id).await;
                 if let Some(name) = name {
+                    let perms = data.db.get_permissions(logged_in.id).await;
                     session.renew();
                     Some(UserInfo {
                         id: logged_in.id,
                         name,
+                        perms: perms.unwrap_or_default(),
                     })
                 } else {
-                    session.remove(super::session_keys::LOGGED_IN);
+                    session.remove(crate::session_keys::LOGGED_IN);
                     None
                 }
             } else {
@@ -91,14 +95,14 @@ where
                 LoginState::ToLogin { id } => {
                     session
                         .insert(
-                            super::session_keys::LOGGED_IN,
+                            crate::session_keys::LOGGED_IN,
                             LoggedInUserSessionData { id },
                         )
                         .unwrap();
                     session.renew();
                 }
                 LoginState::ToLogout => {
-                    session.remove(super::session_keys::LOGGED_IN);
+                    session.remove(crate::session_keys::LOGGED_IN);
                 }
                 LoginState::Unchanged => {}
             }
@@ -123,6 +127,7 @@ pub struct Login {
 pub struct UserInfo {
     pub id: i64,
     pub name: String,
+    pub perms: UserPermissions,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

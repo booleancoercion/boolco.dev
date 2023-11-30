@@ -2,6 +2,12 @@
 
 mod db;
 
+pub mod session_keys {
+    pub const LOGGED_IN: &str = "logged_in";
+    pub const SUCCESSFUL: &str = "successful";
+    pub const NEW_SHORT: &str = "newshort";
+}
+
 const KEY_ENGINE: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 const DATABASE_FILE: &str = "data.sqlite";
 #[cfg(feature = "prepare_db")]
@@ -32,6 +38,7 @@ mod inner {
     pub mod game;
     pub mod index;
     pub mod og;
+    pub mod short;
     pub mod ssl;
 
     use crate::db::Db;
@@ -163,6 +170,10 @@ mod inner {
                     .service(auth::register_post)
                     .service(auth::register_path_post)
                     .service(auth::logout)
+                    .service(short::short_get)
+                    .service(short::short_post)
+                    .service(short::short_link)
+                    .service(short::delete_short)
                     .service(Files::new("/static", "static").show_files_listing())
                     .route(
                         "/favicon.ico",

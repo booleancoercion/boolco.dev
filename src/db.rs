@@ -1,15 +1,52 @@
+use std::net::IpAddr;
+
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use argon2::password_hash::{Encoding, SaltString};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use base64::Engine;
+use rand::distributions::{Alphanumeric, DistString};
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{query, QueryBuilder, SqlitePool};
+use sqlx::{query, query_as, QueryBuilder, SqlitePool};
 
 #[cfg(not(feature = "prepare_db"))]
 use crate::game::GameMessage;
 
 const HASH_ENCODING: Encoding = Encoding::B64;
 const TICKET_ENGINE: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UserPermissions {
+    inner: u64,
+}
+
+impl UserPermissions {
+    const ADMIN: u8 = 0;
+    const SHORT: u8 = 1;
+
+    fn admin(&mut self, set: bool) {
+        if set {
+            self.inner |= 1u64 << Self::ADMIN;
+        } else {
+            self.inner &= !(1u64 << Self::ADMIN);
+        }
+    }
+
+    pub fn is_admin(&self) -> bool {
+        self.inner & (1u64 << Self::ADMIN) != 0
+    }
+
+    fn short(&mut self, set: bool) {
+        if set {
+            self.inner |= 1u64 << Self::SHORT;
+        } else {
+            self.inner &= !(1u64 << Self::SHORT);
+        }
+    }
+
+    pub fn is_short(&self) -> bool {
+        self.is_admin() || self.inner & (1u64 << Self::SHORT) != 0
+    }
+}
 
 #[derive(Debug)]
 pub struct Db {
@@ -22,7 +59,8 @@ impl Db {
     pub async fn new(filename: &str, pepper: &'static [u8]) -> Self {
         let options = SqliteConnectOptions::new()
             .filename(filename)
-            .create_if_missing(true);
+            .create_if_missing(true)
+            .pragma("foreign_keys", "ON");
         let pool = SqlitePool::connect_with(options).await.unwrap();
 
         create_tables(&pool).await;
@@ -31,9 +69,11 @@ impl Db {
             "\
 INSERT OR IGNORE INTO visitors (id, visitors) VALUES (0, 0);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name ON users (name);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets ON registration_tickets (ticket);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_name ON registration_tickets (name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name    ON users                (name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets       ON registration_tickets (ticket);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_name  ON registration_tickets (name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shorts        ON short_links          (short);
+CREATE        INDEX IF NOT EXISTS idx_shorts_userid ON short_links          (user_id);
 "
         )
         .execute(&pool)
@@ -217,6 +257,130 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_tickets_name ON registration_tickets (name
             query_builder.build().execute(&self.pool).await.unwrap();
         }
     }
+
+    pub async fn get_permissions(&self, id: i64) -> Option<UserPermissions> {
+        query!("SELECT * FROM user_permissions WHERE user_id = ?;", id)
+            .fetch_optional(&self.pool)
+            .await
+            .unwrap()
+            .map(|rec| {
+                let mut perms = UserPermissions::default();
+
+                perms.admin(rec.admin);
+                perms.short(rec.short);
+
+                perms
+            })
+    }
+
+    pub async fn create_short_link(
+        &self,
+        user_id: i64,
+        link: &str,
+        short: Option<&str>,
+    ) -> Option<String> {
+        let mut transaction = self.pool.begin().await.unwrap();
+
+        if sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?);")
+            .bind(user_id)
+            .fetch_one(&mut *transaction)
+            .await
+            .unwrap()
+            == 0
+        {
+            return None;
+        }
+
+        let short = if let Some(short) = short {
+            let ret = query!(
+                "INSERT INTO short_links (user_id, url, short) VALUES (?, ?, ?);",
+                user_id,
+                link,
+                short
+            )
+            .execute(&mut *transaction)
+            .await;
+
+            if ret.is_ok() {
+                short.to_owned()
+            } else {
+                return None;
+            }
+        } else {
+            let mut short = String::new();
+            loop {
+                generate_short(&mut short);
+                let res = query!(
+                    "INSERT INTO short_links (user_id, url, short) VALUES (?, ?, ?)",
+                    user_id,
+                    link,
+                    short
+                )
+                .execute(&mut *transaction)
+                .await;
+
+                if res.is_ok() {
+                    break short;
+                }
+            }
+        };
+
+        transaction.commit().await.unwrap();
+        Some(short)
+    }
+
+    pub async fn get_short_link(&self, link: &str, peer_addr: IpAddr) -> Option<String> {
+        let mut transaction = self.pool.begin().await.unwrap();
+
+        let rec = query!("SELECT * FROM short_links WHERE short = ?;", link)
+            .fetch_optional(&mut *transaction)
+            .await
+            .unwrap()?;
+
+        let peer_addr = peer_addr.to_string();
+        query!(
+            "INSERT INTO short_link_stats (link_id, peer_addr) VALUES (?, ?);",
+            rec.id,
+            peer_addr
+        )
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
+
+        transaction.commit().await.unwrap();
+        Some(rec.url)
+    }
+
+    pub async fn get_links(&self, user_id: i64) -> Vec<crate::short::Link> {
+        query_as!(
+            crate::short::Link,
+            "SELECT id, url, short FROM short_links WHERE user_id = ? ORDER BY id ASC;",
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .unwrap()
+    }
+
+    pub async fn delete_if_owns_short_link(&self, user_id: i64, short: &str) -> bool {
+        query!(
+            "DELETE FROM short_links WHERE user_id = ? AND short = ? RETURNING id;",
+            user_id,
+            short
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .unwrap()
+        .is_some()
+    }
+}
+
+const SHORT_LINK_LENGTH: usize = 5;
+
+fn generate_short(short: &mut String) {
+    short.clear();
+    let mut rng = rand::thread_rng();
+    Alphanumeric.append_string(&mut rng, short, SHORT_LINK_LENGTH);
 }
 
 async fn create_tables(conn: impl sqlx::SqliteExecutor<'_>) {
@@ -242,14 +406,29 @@ CREATE TABLE IF NOT EXISTS users(
 
 CREATE TABLE IF NOT EXISTS user_permissions(
     user_id INTEGER NOT NULL PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    admin   BOOLEAN NOT NULL
+    admin   BOOLEAN NOT NULL,
+    short   BOOLEAN NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS registration_tickets(
     id      INTEGER NOT NULL PRIMARY KEY,
     name    TEXT    NOT NULl UNIQUE,
     ticket  TEXT    NOT NULL UNIQUE
-);"
+);
+
+CREATE TABLE IF NOT EXISTS short_links(
+    id      INTEGER NOT NULL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    url     TEXT    NOT NULL,
+    short   TEXT    NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS short_link_stats(
+    id          INTEGER NOT NULL PRIMARY KEY,
+    link_id     INTEGER NOT NULL REFERENCES short_links(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    peer_addr   TEXT NOT NULL
+);
+"
     )
     .execute(conn)
     .await
